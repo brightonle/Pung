@@ -78,6 +78,7 @@ export interface GameStartPayload {
 export interface TileDrawnPayload {
   tile: Tile
   newWallCount: number
+  bonusTiles?: Tile[]
 }
 
 export interface TileDiscardedPayload {
@@ -95,10 +96,12 @@ export interface ClaimResultPayload {
 }
 
 export interface GameOverPayload {
-  winner: Seat
-  winningHand: Tile[]
-  winType: 'self-draw' | 'discard'
+  winner: Seat | null
+  winningHand: Tile[] | null
+  winType: 'self-draw' | 'discard' | 'draw'
   scores: Record<Seat, number>
+  playerHands?: Partial<Record<Seat, Tile[]>>
+  handName?: string
 }
 
 export interface ErrorPayload {

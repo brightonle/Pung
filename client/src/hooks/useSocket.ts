@@ -55,8 +55,20 @@ export function useSocket() {
     function onTileDrawn(payload: TileDrawnPayload) {
       useGameStore.getState().addTileToHand(payload.tile)
       const current = useGameStore.getState().gameState
+      const myId = useGameStore.getState().socketId
       if (current) {
-        useGameStore.getState().setGameState({ ...current, wallCount: payload.newWallCount })
+        const updatedPlayers = payload.bonusTiles?.length
+          ? current.players.map((p) =>
+              p.id === myId
+                ? { ...p, flowerTiles: [...p.flowerTiles, ...(payload.bonusTiles ?? [])] }
+                : p
+            )
+          : current.players
+        useGameStore.getState().setGameState({
+          ...current,
+          wallCount: payload.newWallCount,
+          players: updatedPlayers,
+        })
       }
     }
 
@@ -75,22 +87,23 @@ export function useSocket() {
     function onClaimResult(payload: ClaimResultPayload) {
       const current = useGameStore.getState().gameState
       if (!current) return
+      // Trigger fly animation before state update clears lastDiscard
+      if (payload.claimedBy && payload.claimType !== 'pass' && payload.claimType !== 'win' && current.lastDiscard) {
+        useGameStore.getState().setClaimAnimation({ tile: current.lastDiscard, bySeat: payload.claimedBy })
+      }
       const updatedPlayers = payload.updatedGameState.players ?? current.players
       useGameStore.getState().setGameState({ ...current, ...payload.updatedGameState, players: updatedPlayers })
+    }
 
-      if (payload.claimedBy) {
-        const myPlayer = updatedPlayers.find(
-          (p) => p.id === useGameStore.getState().socketId
-        )
-        if (myPlayer) {
-          useGameStore.getState().setMyHand(myPlayer.hand)
-        }
-      }
+    function onHandUpdate(payload: { hand: import('../types').Tile[] }) {
+      useGameStore.getState().setMyHand(payload.hand)
+      useGameStore.getState().setDrawnTile(null)
     }
 
     function onGameOver(payload: GameOverPayload) {
       const current = useGameStore.getState().gameState
       if (!current) return
+      const myHand = useGameStore.getState().myHand
       useGameStore.getState().setGameState({
         ...current,
         phase: 'finished',
@@ -99,8 +112,14 @@ export function useSocket() {
         players: current.players.map((p) => ({
           ...p,
           score: payload.scores[p.seat] ?? p.score,
+          // Use server-sent hands; fall back to local hand for self
+          hand: payload.playerHands?.[p.seat]
+            ?? (p.id === useGameStore.getState().socketId ? myHand : p.hand),
         })),
       })
+      if (payload.handName) {
+        useGameStore.getState().setWinningHandName(payload.handName)
+      }
     }
 
     function onError(payload: ErrorPayload) {
@@ -115,6 +134,7 @@ export function useSocket() {
     sock.on('tile-drawn', onTileDrawn)
     sock.on('tile-discarded', onTileDiscarded)
     sock.on('claim-result', onClaimResult)
+    sock.on('hand-update', onHandUpdate)
     sock.on('game-over', onGameOver)
     sock.on('error', onError)
 
@@ -135,6 +155,7 @@ export function useSocket() {
       sock.off('tile-drawn', onTileDrawn)
       sock.off('tile-discarded', onTileDiscarded)
       sock.off('claim-result', onClaimResult)
+      sock.off('hand-update', onHandUpdate)
       sock.off('game-over', onGameOver)
       sock.off('error', onError)
     }

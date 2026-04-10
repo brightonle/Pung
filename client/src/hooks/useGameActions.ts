@@ -32,13 +32,17 @@ export function useGameActions() {
     getSocket().emit('discard-tile', { tileId })
   }
 
-  function sendClaim(claimType: Exclude<ClaimType, 'pass'>) {
-    getSocket().emit('claim', { claimType })
+  function sendClaim(claimType: Exclude<ClaimType, 'pass'>, chowTileIds?: [string, string]) {
+    getSocket().emit('claim', { claimType, chowTileIds })
   }
 
   function passClaim() {
     getSocket().emit('pass')
   }
 
-  return { joinRoom, createRoom, addBot, startGame, drawTile, discardTile, sendClaim, passClaim }
+  function declareWin() {
+    getSocket().emit('declare-win')
+  }
+
+  return { joinRoom, createRoom, addBot, startGame, drawTile, discardTile, sendClaim, passClaim, declareWin }
 }

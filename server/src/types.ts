@@ -56,6 +56,8 @@ export interface Room {
   gameState: ServerGameState | null
   claimTimer: ReturnType<typeof setTimeout> | null
   seatOrder: Seat[]
+  // Set when an upgraded kong is declared — Chankan window before replacement draw
+  chankanPending: { seat: Seat; tile: Tile } | null
 }
 
 // Socket payloads C→S

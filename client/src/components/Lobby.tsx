@@ -120,7 +120,7 @@ export default function Lobby() {
       <div className="w-full max-w-sm flex flex-col gap-8">
         <div className="text-center">
           <h1 className="text-white text-5xl font-bold tracking-tight">Pung</h1>
-          <p className="text-white/30 text-sm mt-2">Hong Kong Mahjong</p>
+          <p className="text-white/30 text-sm mt-2">Mahjong</p>
           {!connected && (
             <p className="text-yellow-400/60 text-xs mt-2">Connecting…</p>
           )}

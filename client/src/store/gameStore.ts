@@ -1,10 +1,15 @@
 import { create } from 'zustand'
-import type { GameState, Tile } from '../types'
+import type { GameState, Tile, Seat } from '../types'
 
 interface RoomInfo {
   roomCode: string
   hostId: string
   players: Array<{ id: string; name: string; seat: string; isConnected: boolean; isBot?: boolean }>
+}
+
+export interface ClaimAnimation {
+  tile: Tile
+  bySeat: Seat
 }
 
 interface GameStore {
@@ -22,6 +27,8 @@ interface GameStore {
   myHand: Tile[]
   drawnTile: Tile | null
   selectedTileId: string | null
+  claimAnimation: ClaimAnimation | null
+  winningHandName: string | null
 
   // Actions
   setSocketId: (id: string | null) => void
@@ -35,6 +42,8 @@ interface GameStore {
   setDrawnTile: (tile: Tile | null) => void
   removeTileFromHand: (tileId: string) => void
   selectTile: (id: string | null) => void
+  setClaimAnimation: (anim: ClaimAnimation | null) => void
+  setWinningHandName: (name: string | null) => void
   reset: () => void
 }
 
@@ -48,6 +57,8 @@ export const useGameStore = create<GameStore>((set) => ({
   myHand: [],
   drawnTile: null,
   selectedTileId: null,
+  claimAnimation: null,
+  winningHandName: null,
 
   setSocketId: (id) => set({ socketId: id }),
   setConnected: (connected) => set({ connected }),
@@ -62,9 +73,11 @@ export const useGameStore = create<GameStore>((set) => ({
     set((s) => ({
       myHand: s.myHand.filter((t) => t.id !== tileId),
       selectedTileId: s.selectedTileId === tileId ? null : s.selectedTileId,
-      drawnTile: s.drawnTile?.id === tileId ? null : s.drawnTile,
+      drawnTile: null, // always clear on any discard — drawn state is over
     })),
   selectTile: (selectedTileId) => set({ selectedTileId }),
+  setClaimAnimation: (claimAnimation) => set({ claimAnimation }),
+  setWinningHandName: (winningHandName) => set({ winningHandName }),
   reset: () =>
     set({
       gameState: null,
@@ -72,5 +85,6 @@ export const useGameStore = create<GameStore>((set) => ({
       drawnTile: null,
       selectedTileId: null,
       roomInfo: null,
+      winningHandName: null,
     }),
 }))

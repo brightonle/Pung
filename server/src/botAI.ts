@@ -1,5 +1,5 @@
 import type { Tile, Meld } from './types'
-import { canWin, canPong } from './winDetection'
+import { canWin, canPong, canKong } from './winDetection'
 
 function connectionScore(tile: Tile, others: Tile[]): number {
   let score = 0
@@ -36,13 +36,14 @@ export function botChooseDiscard(hand: Tile[]): Tile {
   return best
 }
 
-/** Bot decides on a claim: win > pong > pass */
+/** Bot decides on a claim: win > kong > pong > pass */
 export function botDecideClaim(
   hand: Tile[],
   melds: Meld[],
   discard: Tile
-): 'win' | 'pong' | 'pass' {
+): 'win' | 'kong' | 'pong' | 'pass' {
   if (canWin(hand, melds, discard)) return 'win'
+  if (canKong(hand, discard)) return 'kong'
   if (canPong(hand, discard)) return 'pong'
   return 'pass'
 }

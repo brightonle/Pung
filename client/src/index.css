@@ -2,6 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes claim-fly-top {
+  from { transform: translate(-50%, -50%) scale(0.75); opacity: 1; }
+  to   { transform: translate(-50%, calc(-50% - 44vh)) scale(0.4); opacity: 0; }
+}
+@keyframes claim-fly-bottom {
+  from { transform: translate(-50%, -50%) scale(0.75); opacity: 1; }
+  to   { transform: translate(-50%, calc(-50% + 44vh)) scale(0.4); opacity: 0; }
+}
+@keyframes claim-fly-left {
+  from { transform: translate(-50%, -50%) scale(0.75); opacity: 1; }
+  to   { transform: translate(calc(-50% - 46vw), -50%) scale(0.4); opacity: 0; }
+}
+@keyframes claim-fly-right {
+  from { transform: translate(-50%, -50%) scale(0.75); opacity: 1; }
+  to   { transform: translate(calc(-50% + 46vw), -50%) scale(0.4); opacity: 0; }
+}
+.claim-fly-top    { animation: claim-fly-top    620ms ease-in forwards; }
+.claim-fly-bottom { animation: claim-fly-bottom 620ms ease-in forwards; }
+.claim-fly-left   { animation: claim-fly-left   620ms ease-in forwards; }
+.claim-fly-right  { animation: claim-fly-right  620ms ease-in forwards; }
+
+@keyframes drawn-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,0.5), 0 0 10px rgba(255,255,255,0.2); }
+  50%       { box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 0 18px rgba(255,255,255,0.45); }
+}
+.drawn-tile-glow {
+  animation: drawn-pulse 1.4s ease-in-out infinite;
+  border-radius: 13px;
+  pointer-events: none;
+}
+
+@keyframes turn-glow {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1; }
+}
+.turn-glow {
+  animation: turn-glow 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
 @keyframes discard-pulse {
   0%, 100% { box-shadow: 0 0 0 2px rgba(253, 224, 71, 0.55), 0 0 8px rgba(253, 224, 71, 0.2); }
   50%       { box-shadow: 0 0 0 3px rgba(253, 224, 71, 0.9),  0 0 14px rgba(253, 224, 71, 0.4); }

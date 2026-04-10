@@ -76,13 +76,13 @@ export function dealHands(
   let wall = deck.slice(wallStart)
 
   // Replace bonus tiles: draw from front of wall, bonus tiles go to bonus pile
+  const flowersByseat: Record<Seat, Tile[]> = { east: [], south: [], west: [], north: [] }
   for (const seat of seats) {
     const hand = hands[seat]
-    const flowerTiles: Tile[] = []
     let i = 0
     while (i < hand.length) {
       if (isBonusTile(hand[i])) {
-        flowerTiles.push(hand.splice(i, 1)[0])
+        flowersByseat[seat].push(hand.splice(i, 1)[0])
         // Draw replacement from end of wall (kan draw position)
         if (wall.length > 0) {
           hand.push(wall.pop()!)
@@ -91,7 +91,6 @@ export function dealHands(
         i++
       }
     }
-    // Store flower tiles on the player object (built below)
   }
 
   const players: Player[] = seats.map((seat, idx) => ({
@@ -100,7 +99,7 @@ export function dealHands(
     seat,
     hand: hands[seat],
     melds: [],
-    flowerTiles: [],
+    flowerTiles: flowersByseat[seat],
     tileCount: hands[seat].length,
     score: 0,
     isDealer: seat === 'east',
@@ -151,6 +150,77 @@ export function applyPong(
     currentTurn: claimerSeat,
     phase: 'playing',
   }
+}
+
+// Claimed Gong — someone discards the 4th tile you needed
+export function applyKong(
+  state: ServerGameState,
+  claimerSeat: Seat,
+  discardTile: Tile
+): ServerGameState {
+  const players = state.players.map((p) => {
+    if (p.seat !== claimerSeat) return p
+    let removed = 0
+    const meldTiles: Tile[] = []
+    const newHand = p.hand.filter((t) => {
+      if (removed < 3 && t.suit === discardTile.suit && t.value === discardTile.value) {
+        removed++; meldTiles.push(t); return false
+      }
+      return true
+    })
+    const meld: Meld = { type: 'kong', tiles: [discardTile, ...meldTiles] }
+    return { ...p, hand: newHand, melds: [...p.melds, meld], tileCount: newHand.length }
+  })
+  return {
+    ...state,
+    players,
+    discardPile: state.discardPile.filter((t) => t.id !== discardTile.id),
+    lastDiscard: null, lastDiscardBy: null,
+    currentTurn: claimerSeat, phase: 'playing',
+  }
+}
+
+// Concealed Gong — 4 tiles all from your own hand (middle 2 shown face-down)
+export function applyConcealedKong(
+  state: ServerGameState,
+  seat: Seat,
+  suit: string,
+  value: string | number
+): ServerGameState {
+  const players = state.players.map((p) => {
+    if (p.seat !== seat) return p
+    let removed = 0
+    const meldTiles: Tile[] = []
+    const newHand = p.hand.filter((t) => {
+      if (removed < 4 && t.suit === suit && t.value === value) {
+        removed++; meldTiles.push(t); return false
+      }
+      return true
+    })
+    const meld: Meld = { type: 'concealed-kong', tiles: meldTiles }
+    return { ...p, hand: newHand, melds: [...p.melds, meld], tileCount: newHand.length }
+  })
+  return { ...state, players }
+}
+
+// Upgraded Gong — you already have an exposed Pong and draw the 4th tile
+export function applyUpgradedKong(
+  state: ServerGameState,
+  seat: Seat,
+  tile: Tile
+): ServerGameState {
+  const players = state.players.map((p) => {
+    if (p.seat !== seat) return p
+    const newHand = p.hand.filter((t) => t.id !== tile.id)
+    const melds = p.melds.map((m) => {
+      if (m.type === 'pong' && m.tiles[0].suit === tile.suit && m.tiles[0].value === tile.value) {
+        return { ...m, type: 'kong' as Meld['type'], tiles: [...m.tiles, tile] }
+      }
+      return m
+    })
+    return { ...p, hand: newHand, melds, tileCount: newHand.length }
+  })
+  return { ...state, players }
 }
 
 export function applyChow(
@@ -223,6 +293,40 @@ export function drawFromWall(state: ServerGameState): { tile: Tile | null; newSt
   if (state.wall.length === 0) return { tile: null, newState: state }
   const [tile, ...rest] = state.wall
   return { tile, newState: { ...state, wall: rest, wallCount: rest.length } }
+}
+
+/**
+ * Draw from wall, auto-replacing any bonus (flower/season) tiles and adding
+ * them to the player's flowerTiles. Returns the first non-bonus tile drawn
+ * (or null if wall exhausted), plus any bonus tiles picked up along the way.
+ */
+export function drawFromWallAutoFlower(
+  state: ServerGameState,
+  seat: Seat
+): { tile: Tile | null; newState: ServerGameState; bonusTiles: Tile[] } {
+  let current = state
+  const bonusTiles: Tile[] = []
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (current.wall.length === 0) return { tile: null, newState: current, bonusTiles }
+    const [drawn, ...rest] = current.wall
+    current = { ...current, wall: rest, wallCount: rest.length }
+
+    if (isBonusTile(drawn)) {
+      bonusTiles.push(drawn)
+      // Add to player's flowerTiles
+      current = {
+        ...current,
+        players: current.players.map((p) =>
+          p.seat === seat ? { ...p, flowerTiles: [...p.flowerTiles, drawn] } : p
+        ),
+      }
+      // Loop to draw replacement
+    } else {
+      return { tile: drawn, newState: current, bonusTiles }
+    }
+  }
 }
 
 export function addTileToHand(state: ServerGameState, seat: Seat, tile: Tile): ServerGameState {

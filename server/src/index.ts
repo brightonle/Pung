@@ -8,12 +8,16 @@ import {
   applyDiscard,
   applyPong,
   applyChow,
+  applyKong,
+  applyConcealedKong,
+  applyUpgradedKong,
   drawFromWall,
+  drawFromWallAutoFlower,
   addTileToHand,
   nextSeat,
   getPublicGameState,
 } from './gameEngine'
-import { canWin, canPong, canKong, canChow } from './winDetection'
+import { canWin, canPong, canKong, canChow, getWinResult } from './winDetection'
 import { botChooseDiscard, botDecideClaim } from './botAI'
 import type { ServerGameState, Seat, ClaimType } from './types'
 
@@ -26,8 +30,8 @@ const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 })
 
-const CLAIM_TIMEOUT_MS = 5000
-const BOT_THINK_MS = 900   // delay before bot acts
+const CLAIM_TIMEOUT_MS = 15000
+const BOT_THINK_MS = 2000  // delay before bot acts
 
 // ── Bot helpers ──────────────────────────────────────────────────────────────
 
@@ -45,12 +49,13 @@ function scheduleBotTurn(roomCode: string) {
     if (!r?.gameState || r.gameState.phase !== 'playing') return
     if (r.gameState.currentTurn !== currentPlayer.seat) return
 
-    // Bot draws
-    const { tile, newState } = drawFromWall(r.gameState)
+    // Bot draws (auto-replace flowers)
+    const { tile, newState, bonusTiles: _botBonus } = drawFromWallAutoFlower(r.gameState, currentPlayer.seat)
     if (!tile) {
       io.to(roomCode).emit('game-over', {
         winner: null, winningHand: null, winType: 'draw',
         scores: Object.fromEntries(r.gameState.players.map((p) => [p.seat, p.score])),
+        playerHands: Object.fromEntries(r.gameState.players.map((p) => [p.seat, p.hand])),
       })
       r.gameState = { ...newState, phase: 'finished' }
       return
@@ -65,13 +70,17 @@ function scheduleBotTurn(roomCode: string) {
       if (!r2?.gameState) return
 
       // Check self-draw win
-      if (canWin(botPlayer.hand.filter((t) => t.id !== tile.id), botPlayer.melds, tile)) {
+      const botHandWithoutDraw = botPlayer.hand.filter((t) => t.id !== tile.id)
+      const botWinResult = getWinResult(botHandWithoutDraw, botPlayer.melds, tile)
+      if (botWinResult) {
         r2.gameState = { ...r2.gameState, phase: 'finished', winner: currentPlayer.seat, winningHand: botPlayer.hand }
         io.to(roomCode).emit('game-over', {
           winner: currentPlayer.seat,
           winningHand: botPlayer.hand,
           winType: 'self-draw',
           scores: Object.fromEntries(r2.gameState.players.map((p) => [p.seat, p.score])),
+          playerHands: Object.fromEntries(r2.gameState.players.map((p) => [p.seat, p.hand])),
+          handName: botWinResult,
         })
         return
       }
@@ -224,20 +233,56 @@ io.on('connection', (socket) => {
     const gs = room.gameState
     const player = gs.players.find((p) => p.id === socket.id)
     if (!player || player.seat !== gs.currentTurn || gs.phase !== 'playing') return
-    if (player.hand.length >= 14) return
+    if (player.hand.length % 3 !== 1) return
 
-    const { tile, newState } = drawFromWall(gs)
+    const { tile, newState, bonusTiles } = drawFromWallAutoFlower(gs, player.seat)
     if (!tile) {
       io.to(room.code).emit('game-over', {
         winner: null, winningHand: null, winType: 'draw',
         scores: Object.fromEntries(gs.players.map((p) => [p.seat, p.score])),
+        playerHands: Object.fromEntries(gs.players.map((p) => [p.seat, p.hand])),
       })
       room.gameState = { ...newState, phase: 'finished' }
       return
     }
 
     room.gameState = addTileToHand(newState, player.seat, tile)
-    socket.emit('tile-drawn', { tile, newWallCount: room.gameState.wall.length })
+    // Broadcast updated public state (flowerTiles counts changed)
+    if (bonusTiles.length > 0) {
+      io.to(room.code).emit('claim-result', {
+        claimedBy: null, claimType: 'pass' as ClaimType,
+        updatedGameState: getPublicGameState(room.gameState),
+      })
+    }
+    socket.emit('tile-drawn', { tile, newWallCount: room.gameState.wall.length, bonusTiles })
+  })
+
+  socket.on('declare-win', () => {
+    const room = roomManager.getRoomByPlayer(socket.id)
+    if (!room?.gameState) return
+    const gs = room.gameState
+    const player = gs.players.find((p) => p.id === socket.id)
+    if (!player || player.seat !== gs.currentTurn || gs.phase !== 'playing') return
+    if (player.hand.length % 3 !== 2) return // must have drawn
+
+    // The drawn tile is the last in hand
+    const drawnTile = player.hand[player.hand.length - 1]
+    const handWithoutDraw = player.hand.slice(0, -1)
+    const winResult = getWinResult(handWithoutDraw, player.melds, drawnTile)
+    if (!winResult) return
+
+    const winHand = [...player.hand]
+    room.gameState = { ...gs, phase: 'finished', winner: player.seat, winningHand: winHand }
+    io.to(room.code).emit('game-over', {
+      winner: player.seat,
+      winningHand: winHand,
+      winType: 'self-draw',
+      scores: Object.fromEntries(gs.players.map((p) => [p.seat, p.score])),
+      playerHands: Object.fromEntries(gs.players.map((p) =>
+        [p.seat, p.seat === player.seat ? winHand : p.hand]
+      )),
+      handName: winResult,
+    })
   })
 
   socket.on('discard-tile', ({ tileId }: { tileId: string }) => {
@@ -303,7 +348,7 @@ io.on('connection', (socket) => {
 
 // ── Claim resolution ─────────────────────────────────────────────────────────
 
-function startClaimWindow(roomCode: string) {
+function startClaimWindow(roomCode: string, timeoutMs = CLAIM_TIMEOUT_MS) {
   const room = roomManager.getRoom(roomCode)
   if (!room) return
   if (room.claimTimer) clearTimeout(room.claimTimer)
@@ -352,12 +397,18 @@ function resolveClaims(roomCode: string) {
   const claimer = gs.players.find((p) => p.id === winning.playerId)!
 
   if (winning.claimType === 'win') {
-    if (canWin(claimer.hand, claimer.melds, discardTile)) {
+    const winResult = getWinResult(claimer.hand, claimer.melds, discardTile)
+    if (winResult) {
       const winHand = [...claimer.hand, discardTile]
       room.gameState = { ...gs, phase: 'finished', winner: claimer.seat, winningHand: winHand }
+      const handsAtEnd = Object.fromEntries(gs.players.map((p) =>
+        [p.seat, p.seat === claimer.seat ? winHand : p.hand]
+      ))
       io.to(roomCode).emit('game-over', {
         winner: claimer.seat, winningHand: winHand, winType: 'discard',
         scores: Object.fromEntries(gs.players.map((p) => [p.seat, p.score])),
+        playerHands: handsAtEnd,
+        handName: winResult,
       })
       return
     }
@@ -366,20 +417,16 @@ function resolveClaims(roomCode: string) {
     room.gameState = newState
     const updatedClaimer = newState.players.find((p) => p.id === winning.playerId)!
 
-    // Send updated private hand to the claimer (if human)
-    if (!roomManager.isBot(room, winning.playerId)) {
-      const claimerSocket = io.sockets.sockets.get(winning.playerId)
-      claimerSocket?.emit('claim-result', {
-        claimedBy: claimer.seat, claimType: 'pong',
-        updatedGameState: { ...getPublicGameState(newState), players: newState.players.map((p) => ({ ...p, hand: [] })) },
-        newMeld: updatedClaimer.melds[updatedClaimer.melds.length - 1],
-      })
-    }
-
     io.to(roomCode).emit('claim-result', {
       claimedBy: claimer.seat, claimType: 'pong',
       updatedGameState: getPublicGameState(newState),
     })
+
+    // Send updated private hand to the claimer (if human)
+    if (!roomManager.isBot(room, winning.playerId)) {
+      const claimerSocket = io.sockets.sockets.get(winning.playerId)
+      claimerSocket?.emit('hand-update', { hand: updatedClaimer.hand })
+    }
 
     // If pong claimer is a bot, schedule their next discard
     if (roomManager.isBot(room, winning.playerId)) {
@@ -405,13 +452,64 @@ function resolveClaims(roomCode: string) {
       }, BOT_THINK_MS)
     }
     return
+  } else if (winning.claimType === 'kong') {
+    // Claimed Gong: apply, draw replacement from wall
+    const afterKong = applyKong(gs, claimer.seat, discardTile)
+    const { tile: replacement, newState: afterDraw } = drawFromWall(afterKong)
+    if (!replacement) {
+      room.gameState = { ...afterKong, phase: 'finished' }
+      io.to(roomCode).emit('game-over', {
+        winner: null, winningHand: null, winType: 'draw',
+        scores: Object.fromEntries(gs.players.map((p) => [p.seat, p.score])),
+        playerHands: Object.fromEntries(afterKong.players.map((p) => [p.seat, p.hand])),
+      })
+      return
+    }
+    const stateAfterKong = addTileToHand(afterDraw, claimer.seat, replacement)
+    room.gameState = stateAfterKong
+    const updatedClaimer = stateAfterKong.players.find((p) => p.id === winning.playerId)!
+    io.to(roomCode).emit('claim-result', {
+      claimedBy: claimer.seat, claimType: 'kong',
+      updatedGameState: getPublicGameState(stateAfterKong),
+    })
+    if (!roomManager.isBot(room, winning.playerId)) {
+      io.sockets.sockets.get(winning.playerId)?.emit('hand-update', { hand: updatedClaimer.hand })
+    }
+    if (roomManager.isBot(room, winning.playerId)) {
+      setTimeout(() => {
+        const r = roomManager.getRoom(roomCode)
+        if (!r?.gameState) return
+        const bp = r.gameState.players.find((p) => p.id === winning.playerId)!
+        const discardChoice = botChooseDiscard(bp.hand)
+        const { newState: afterDiscard, discardedTile } = applyDiscard(r.gameState, claimer.seat, discardChoice.id)
+        if (!discardedTile) return
+        r.gameState = afterDiscard
+        r.gameState.pendingClaims = new Map()
+        const opponents = afterDiscard.players.filter((p) => p.id !== winning.playerId)
+        const anyClaim = opponents.some((p) =>
+          canWin(p.hand, p.melds, discardedTile) || canPong(p.hand, discardedTile) || canKong(p.hand, discardedTile)
+        )
+        io.to(roomCode).emit('tile-discarded', {
+          by: claimer.seat, tile: discardedTile, claimWindow: anyClaim,
+          newDiscardPile: afterDiscard.discardPile,
+        })
+        if (anyClaim) { startClaimWindow(roomCode); scheduleBotClaims(roomCode, discardedTile) }
+        else advanceTurn(roomCode)
+      }, BOT_THINK_MS)
+    }
+    return
   } else if (winning.claimType === 'chow' && winning.chowTileIds) {
     const newState = applyChow(gs, claimer.seat, discardTile, winning.chowTileIds)
     room.gameState = newState
+    const updatedChowClaimer = newState.players.find((p) => p.id === winning.playerId)!
     io.to(roomCode).emit('claim-result', {
       claimedBy: claimer.seat, claimType: 'chow',
       updatedGameState: getPublicGameState(newState),
     })
+    if (!roomManager.isBot(room, winning.playerId)) {
+      const claimerSocket = io.sockets.sockets.get(winning.playerId)
+      claimerSocket?.emit('hand-update', { hand: updatedChowClaimer.hand })
+    }
     return
   }
 

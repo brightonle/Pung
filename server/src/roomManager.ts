@@ -2,7 +2,7 @@ import type { Room, Player, Seat } from './types'
 
 const rooms = new Map<string, Room>()
 const SEATS: Seat[] = ['east', 'south', 'west', 'north']
-const BOT_NAMES = ['Mei', 'Wei', 'Fong', 'Liang']
+const BOT_NAMES = ['Mei', 'Zhou', 'Fong', 'Liang']
 
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
@@ -35,6 +35,7 @@ export function createRoom(hostId: string, hostName: string): Room {
     gameState: null,
     claimTimer: null,
     seatOrder: SEATS,
+    chankanPending: null,
   }
   rooms.set(code, room)
   return room
