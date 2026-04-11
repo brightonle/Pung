@@ -19,7 +19,7 @@ export default function DiscardPile({ tiles, lastDiscardId }: DiscardPileProps) 
 
   return (
     <div className="w-full h-full overflow-hidden p-1">
-      <div className="flex flex-wrap gap-[3px] justify-center content-start">
+      <div className="flex flex-wrap gap-[3px] justify-center content-start" style={{ maxWidth: 'calc(100% - 152px)', margin: '0 auto' }}>
         {tiles.map((tile) => {
           const isLast = tile.id === lastDiscardId
           const isNew = !seenIds.current.has(tile.id)
@@ -29,22 +29,19 @@ export default function DiscardPile({ tiles, lastDiscardId }: DiscardPileProps) 
             <div
               key={tile.id}
               className={isLast ? 'last-discard' : isNew ? 'tile-appear' : undefined}
-              style={{
-                width: isLast ? CELL_W + 3 : CELL_W,
-                height: isLast ? CELL_H + 3 : CELL_H,
-                overflow: 'hidden',
-                flexShrink: 0,
-              }}
+              style={{ width: CELL_W, height: CELL_H, flexShrink: 0, borderRadius: 4 }}
             >
-              <div
-                style={{
-                  transform: `scale(${SCALE})`,
-                  transformOrigin: 'top left',
-                  width: TILE_W,
-                  height: TILE_H,
-                }}
-              >
-                <MahjongTile suit={tile.suit} value={tile.value} />
+              <div style={{ overflow: 'hidden', width: CELL_W, height: CELL_H, borderRadius: 4 }}>
+                <div
+                  style={{
+                    transform: `scale(${SCALE})`,
+                    transformOrigin: 'top left',
+                    width: TILE_W,
+                    height: TILE_H,
+                  }}
+                >
+                  <MahjongTile suit={tile.suit} value={tile.value} />
+                </div>
               </div>
             </div>
           )

@@ -5,7 +5,7 @@ import { getWinResult } from '../utils/winDetection'
 
 const CLAIM_TIMEOUT_MS = 15000
 
-export default function ActionButtons() {
+export default function ActionButtons({ bottomOffset }: { bottomOffset?: number }) {
   const gameState = useGameStore((s) => s.gameState)
   const socketId = useGameStore((s) => s.socketId)
   const myHand = useGameStore((s) => s.myHand)
@@ -87,13 +87,9 @@ export default function ActionButtons() {
   if (!showDraw && !showClaim && !showSelfDrawWin) return null
 
   const chiTileIds = showClaim ? getChiTileIds() : null
-  const meldCount = myPlayer.melds.length
-  // hand strip (~118) + meld/flower row when present (~52) + gap
-  const bottomPx = 118 + (meldCount > 0 ? 52 : 0) + 24
-
   return (
     <div className="fixed left-0 right-0 flex flex-col items-center gap-2 z-20"
-      style={{ bottom: bottomPx }}
+      style={{ bottom: bottomOffset ?? 180 }}
     >
       {showClaim && (
         <div className="w-64 h-[3px] bg-white/10 rounded-full overflow-hidden">

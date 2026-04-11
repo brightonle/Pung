@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { GameState, Tile, Seat } from '../types'
+import type { IconChoice } from '../components/AccountSetup'
 
 interface RoomInfo {
   roomCode: string
@@ -12,10 +13,19 @@ export interface ClaimAnimation {
   bySeat: Seat
 }
 
+export interface UserProfile {
+  username: string
+  icon: IconChoice
+  points: number
+}
+
 interface GameStore {
   // Connection
   socketId: string | null
   connected: boolean
+
+  // User profile
+  userProfile: UserProfile | null
 
   // Lobby
   playerName: string
@@ -33,6 +43,7 @@ interface GameStore {
   // Actions
   setSocketId: (id: string | null) => void
   setConnected: (c: boolean) => void
+  setUserProfile: (profile: UserProfile | null) => void
   setPlayerName: (name: string) => void
   setRoomInfo: (info: RoomInfo | null) => void
   setServerError: (msg: string | null) => void
@@ -47,9 +58,19 @@ interface GameStore {
   reset: () => void
 }
 
+function loadProfile(): UserProfile | null {
+  try {
+    const raw = localStorage.getItem('pung_profile')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 export const useGameStore = create<GameStore>((set) => ({
   socketId: null,
   connected: false,
+  userProfile: loadProfile(),
   playerName: '',
   roomInfo: null,
   serverError: null,
@@ -62,6 +83,7 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setSocketId: (id) => set({ socketId: id }),
   setConnected: (connected) => set({ connected }),
+  setUserProfile: (userProfile) => set({ userProfile }),
   setPlayerName: (playerName) => set({ playerName }),
   setRoomInfo: (roomInfo) => set({ roomInfo }),
   setServerError: (serverError) => set({ serverError }),

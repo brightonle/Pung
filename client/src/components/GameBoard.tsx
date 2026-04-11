@@ -9,6 +9,7 @@ import PlayerHand from './PlayerHand'
 import ActionButtons from './ActionButtons'
 import MeldGroup from './MeldGroup'
 import MahjongTile from './MahjongTile'
+import PointsBadge from './PointsBadge'
 
 const SUIT_ORDER = ['dots', 'bamboo', 'characters', 'winds', 'dragons', 'flowers', 'seasons']
 
@@ -75,69 +76,10 @@ export default function GameBoard() {
   const topPlayer   = playerBySeat(topSeat)
   const rightPlayer = playerBySeat(rightSeat)
 
-  // ── Win screen ──────────────────────────────────────────────────────────────
-  if (gameState.phase === 'finished') {
-    const winnerPlayer = gameState.winner ? playerBySeat(gameState.winner) : null
-    const isMe = gameState.winner === myPlayer.seat
-    const orderedSeats: Seat[] = ['east', 'south', 'west', 'north']
-    return (
-      <div className="fixed inset-0 bg-[#111] overflow-y-auto z-50">
-        <div className="min-h-full flex flex-col items-center justify-start py-8 px-4 gap-6">
-          <div className="text-center">
-            <div className="text-white/30 text-xs uppercase tracking-widest mb-1">
-              {gameState.winner ? (isMe ? 'You win!' : `${winnerPlayer?.name ?? 'Someone'} wins`) : 'Draw'}
-            </div>
-            <div className="text-white text-4xl font-bold mb-1">
-              {gameState.winner ? (isMe ? '🀄' : SEAT_WIND[gameState.winner]) : '—'}
-            </div>
-            {winningHandName && (
-              <div className="text-white/70 text-base font-medium tracking-wide">{winningHandName}</div>
-            )}
-          </div>
-
-          <div className="w-full max-w-lg flex flex-col gap-4">
-            {orderedSeats.map((seat) => {
-              const p = playerBySeat(seat)
-              if (!p) return null
-              const isWinner = seat === gameState.winner
-              const showHand = p.id === myPlayer.id ? myHand : p.hand
-              return (
-                <div key={seat}
-                  className={`rounded-xl p-3 border ${isWinner ? 'border-white/30 bg-white/5' : 'border-white/[0.06] bg-white/[0.02]'}`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs font-semibold ${isWinner ? 'text-white' : 'text-white/50'}`}>{p.name}</span>
-                    <span className="text-white/20 text-[10px]">{SEAT_WIND[seat]}</span>
-                    {isWinner && <span className="text-white/40 text-[10px] uppercase tracking-widest">winner</span>}
-                  </div>
-                  <div className="flex flex-wrap gap-[2px]">
-                    {sortTiles(showHand).map((tile) => (
-                      <SmallTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.5} />
-                    ))}
-                    {p.melds.map((meld, i) => (
-                      <div key={`meld-${i}`} className="flex gap-[1px] ml-2 border-l border-white/10 pl-2">
-                        {meld.tiles.map((tile, j) => (
-                          <SmallTile key={j} suit={tile.suit} value={tile.value} scale={0.5} />
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                  {p.flowerTiles.length > 0 && (
-                    <div className="flex flex-wrap gap-[2px] mt-2 pt-2 border-t border-white/5">
-                      <span className="text-white/20 text-[9px] uppercase tracking-widest self-center mr-1">Flowers</span>
-                      {p.flowerTiles.map((tile) => (
-                        <SmallTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.4} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const isFinished = gameState.phase === 'finished'
+  const winnerPlayer = gameState.winner ? playerBySeat(gameState.winner) : null
+  const isMe = gameState.winner === myPlayer.seat
+  const orderedSeats: Seat[] = ['east', 'south', 'west', 'north']
 
   const handStripH = 90 + 28   // ~118px
 
@@ -174,6 +116,11 @@ export default function GameBoard() {
           style={{ background: glowGradient[activeDir] }}
         />
       )}
+
+      {/* ── Points badge (top-right) ────────────────────────── */}
+      <div className="absolute top-3 right-3 z-20">
+        <PointsBadge />
+      </div>
 
       {/* ── Top opponent ────────────────────────────────────── */}
       <div className="absolute top-0 left-0 right-0 flex flex-col items-center pt-2 z-10">
@@ -256,6 +203,9 @@ export default function GameBoard() {
         </div>
       )}
 
+      {/* ── Action buttons ───────────────────────────────── */}
+      <ActionButtons bottomOffset={handStripH + myExtrasH + 34} />
+
       {/* ── My label ─────────────────────────────────────── */}
       <div
         className="absolute left-0 right-0 flex justify-center"
@@ -263,9 +213,6 @@ export default function GameBoard() {
       >
         <PlayerLabel player={myPlayer} isActive={isMyTurn} />
       </div>
-
-      {/* ── Action buttons ───────────────────────────────── */}
-      <ActionButtons />
 
       {/* ── My hand ──────────────────────────────────────── */}
       <PlayerHand
@@ -288,6 +235,70 @@ export default function GameBoard() {
           </div>
         )
       })()}
+
+      {/* ── Win overlay ──────────────────────────────────── */}
+      {isFinished && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', background: 'rgba(0,0,0,0.55)' }}
+        >
+          <div className="w-full max-w-sm mx-4 flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-6"
+            style={{ boxShadow: '0 8px 48px rgba(0,0,0,0.6)' }}
+          >
+            {/* Header */}
+            <div className="text-center">
+              <div className="text-white/40 text-xs uppercase tracking-widest mb-1">
+                {gameState.winner ? (isMe ? 'You win!' : `${winnerPlayer?.name ?? 'Someone'} wins`) : 'Draw'}
+              </div>
+              <div className="text-white text-5xl font-bold mb-1">
+                {gameState.winner ? (isMe ? '🀄' : SEAT_WIND[gameState.winner]) : '—'}
+              </div>
+              {winningHandName && (
+                <div className="text-white/60 text-sm font-medium tracking-wide">{winningHandName}</div>
+              )}
+            </div>
+
+            {/* Player hands */}
+            <div className="flex flex-col gap-2">
+              {orderedSeats.map((seat) => {
+                const p = playerBySeat(seat)
+                if (!p) return null
+                const isWinner = seat === gameState.winner
+                const showHand = p.id === myPlayer.id ? myHand : p.hand
+                return (
+                  <div key={seat}
+                    className={`rounded-xl p-2.5 border ${isWinner ? 'border-white/25 bg-white/[0.06]' : 'border-white/[0.05] bg-white/[0.02]'}`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className={`text-xs font-semibold ${isWinner ? 'text-white' : 'text-white/40'}`}>{p.name}</span>
+                      <span className="text-white/20 text-[10px]">{SEAT_WIND[seat]}</span>
+                      {isWinner && <span className="text-white/35 text-[9px] uppercase tracking-widest ml-auto">winner</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-[2px]">
+                      {sortTiles(showHand).map((tile) => (
+                        <SmallTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.42} />
+                      ))}
+                      {p.melds.map((meld, i) => (
+                        <div key={`meld-${i}`} className="flex gap-[1px] ml-1.5 border-l border-white/10 pl-1.5">
+                          {meld.tiles.map((tile, j) => (
+                            <SmallTile key={j} suit={tile.suit} value={tile.value} scale={0.42} />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    {p.flowerTiles.length > 0 && (
+                      <div className="flex flex-wrap gap-[2px] mt-1.5 pt-1.5 border-t border-white/5">
+                        {p.flowerTiles.map((tile) => (
+                          <SmallTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.35} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

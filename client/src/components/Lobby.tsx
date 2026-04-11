@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useGameStore } from '../store/gameStore'
 import { useGameActions } from '../hooks/useGameActions'
 import type { Seat } from '../types'
+import PointsBadge from './PointsBadge'
 
 const SEAT_LABEL: Record<Seat, string> = {
   east: 'East',
@@ -11,7 +12,6 @@ const SEAT_LABEL: Record<Seat, string> = {
 }
 
 export default function Lobby() {
-  const [nameInput, setNameInput] = useState('')
   const [roomInput, setRoomInput] = useState('')
   const [error, setError] = useState('')
 
@@ -19,7 +19,10 @@ export default function Lobby() {
   const socketId = useGameStore((s) => s.socketId)
   const connected = useGameStore((s) => s.connected)
   const serverError = useGameStore((s) => s.serverError)
+  const userProfile = useGameStore((s) => s.userProfile)
   const { joinRoom, createRoom, startGame, addBot } = useGameActions()
+
+  const playerName = userProfile?.username ?? ''
 
   // Show server errors (e.g. room not found)
   const displayError = error || serverError || ''
@@ -29,22 +32,25 @@ export default function Lobby() {
   const canStart = players.length === 4
 
   async function handleCreate() {
-    if (!nameInput.trim()) return
+    if (!playerName) return
     setError('')
-    createRoom(nameInput.trim())
+    createRoom(playerName)
   }
 
   async function handleJoin() {
     const code = roomInput.trim().toUpperCase()
-    if (!nameInput.trim() || !code) return
+    if (!playerName || !code) return
     setError('')
-    joinRoom(code, nameInput.trim())
+    joinRoom(code, playerName)
   }
 
   // ── Waiting room ──────────────────────────────────────────────────────────
   if (roomInfo) {
     return (
-      <div className="min-h-screen bg-[#111] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[#111] flex items-center justify-center p-6 relative">
+        <div className="absolute top-3 right-3">
+          <PointsBadge />
+        </div>
         <div className="w-full max-w-sm flex flex-col gap-6">
           <div className="text-center">
             <div className="text-white/30 text-xs uppercase tracking-widest mb-1">Room Code</div>
@@ -116,7 +122,10 @@ export default function Lobby() {
 
   // ── Join / Create form ────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#111] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#111] flex items-center justify-center p-6 relative">
+      <div className="absolute top-3 right-3">
+        <PointsBadge />
+      </div>
       <div className="w-full max-w-sm flex flex-col gap-8">
         <div className="text-center">
           <h1 className="text-white text-5xl font-bold tracking-tight">Pung</h1>
@@ -129,20 +138,10 @@ export default function Lobby() {
         <div className="flex flex-col gap-3">
           <input
             type="text"
-            placeholder="Your name"
-            value={nameInput}
-            onChange={(e) => { setNameInput(e.target.value); setError('') }}
-            onKeyDown={(e) => e.key === 'Enter' && roomInput ? handleJoin() : undefined}
-            maxLength={20}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/25
-              text-sm outline-none focus:border-white/30 transition-colors"
-          />
-          <input
-            type="text"
             placeholder="Room code (to join existing)"
             value={roomInput}
             onChange={(e) => { setRoomInput(e.target.value.toUpperCase()); setError('') }}
-            onKeyDown={(e) => e.key === 'Enter' && nameInput && roomInput ? handleJoin() : undefined}
+            onKeyDown={(e) => e.key === 'Enter' && roomInput ? handleJoin() : undefined}
             maxLength={4}
             className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/25
               text-sm uppercase tracking-[0.25em] outline-none focus:border-white/30 transition-colors"
@@ -155,10 +154,10 @@ export default function Lobby() {
           <div className="flex gap-3">
             <button
               onClick={handleCreate}
-              disabled={!nameInput.trim() || !connected}
+              disabled={!connected}
               className={[
                 'flex-1 py-3 rounded-xl font-semibold text-sm transition-all duration-100',
-                nameInput.trim() && connected
+                connected
                   ? 'bg-white text-black hover:bg-white/90 active:scale-[0.98]'
                   : 'bg-white/10 text-white/30 cursor-not-allowed',
               ].join(' ')}
@@ -167,10 +166,10 @@ export default function Lobby() {
             </button>
             <button
               onClick={handleJoin}
-              disabled={!nameInput.trim() || !roomInput.trim() || !connected}
+              disabled={!roomInput.trim() || !connected}
               className={[
                 'flex-1 py-3 rounded-xl font-semibold text-sm transition-all duration-100',
-                nameInput.trim() && roomInput.trim() && connected
+                roomInput.trim() && connected
                   ? 'bg-white/10 text-white border border-white/20 hover:bg-white/15 active:scale-[0.98]'
                   : 'bg-white/5 text-white/30 cursor-not-allowed border border-white/5',
               ].join(' ')}
