@@ -1,4 +1,5 @@
-import type { Tile, Seat } from '../types'
+import { useRef } from 'react'
+import type { Tile } from '../types'
 import MahjongTile from './MahjongTile'
 
 const SCALE = 0.52
@@ -10,26 +11,29 @@ const CELL_H = Math.round(TILE_H * SCALE)   // 47
 interface DiscardPileProps {
   tiles: Tile[]
   lastDiscardId?: string | null
-  lastDiscardBySeat?: Seat | null
-  mySeat?: Seat | null
 }
 
 export default function DiscardPile({ tiles, lastDiscardId }: DiscardPileProps) {
+  // Track IDs we've already rendered so only newly added tiles get the animation
+  const seenIds = useRef<Set<string>>(new Set())
+
   return (
     <div className="w-full h-full overflow-hidden p-1">
       <div className="flex flex-wrap gap-[3px] justify-center content-start">
-        {tiles.map((tile, i) => {
+        {tiles.map((tile) => {
           const isLast = tile.id === lastDiscardId
+          const isNew = !seenIds.current.has(tile.id)
+          if (isNew) seenIds.current.add(tile.id)
+
           return (
             <div
               key={tile.id}
-              className={isLast ? 'last-discard' : 'tile-appear'}
+              className={isLast ? 'last-discard' : isNew ? 'tile-appear' : undefined}
               style={{
-                width: isLast ? CELL_W + 2 : CELL_W,
-                height: isLast ? CELL_H + 2 : CELL_H,
+                width: isLast ? CELL_W + 3 : CELL_W,
+                height: isLast ? CELL_H + 3 : CELL_H,
                 overflow: 'hidden',
                 flexShrink: 0,
-                animationDelay: `${Math.min(i * 0, 0)}ms`,
               }}
             >
               <div

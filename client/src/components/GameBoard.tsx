@@ -22,11 +22,21 @@ function sortTiles(tiles: Tile[]): Tile[] {
   })
 }
 
+// Renders a tile at a fixed layout size
+function SmallTile({ suit, value, scale = 0.4 }: { suit: Tile['suit']; value: Tile['value']; scale?: number }) {
+  const w = Math.round(68 * scale)
+  const h = Math.round(90 * scale)
+  return (
+    <div style={{ width: w, height: h, overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: 68, height: 90 }}>
+        <MahjongTile suit={suit} value={value} />
+      </div>
+    </div>
+  )
+}
+
 const SEAT_WIND: Record<Seat, string> = {
-  east: '東',
-  south: '南',
-  west: '西',
-  north: '北',
+  east: '東', south: '南', west: '西', north: '北',
 }
 
 export default function GameBoard() {
@@ -38,7 +48,6 @@ export default function GameBoard() {
   const winningHandName = useGameStore((s) => s.winningHandName)
   const { drawTile } = useGameActions()
 
-  // Clear claim animation after it finishes
   useEffect(() => {
     if (!claimAnimation) return
     const t = setTimeout(() => setClaimAnimation(null), 700)
@@ -51,24 +60,22 @@ export default function GameBoard() {
   if (!myPlayer) return null
 
   const isMyTurn = myPlayer.seat === gameState.currentTurn && gameState.phase === 'playing'
-  // post-draw hand size is always % 3 === 2 (14, 11, 8, ... depending on melds formed)
   const hasDrawnThisTurn = myHand.length % 3 === 2
 
-  // Arrange opponents relative to my seat
   const seats: Seat[] = ['east', 'south', 'west', 'north']
   const myIdx = seats.indexOf(myPlayer.seat)
-  const leftSeat = seats[(myIdx + 1) % 4]
-  const topSeat = seats[(myIdx + 2) % 4]
+  const leftSeat  = seats[(myIdx + 1) % 4]
+  const topSeat   = seats[(myIdx + 2) % 4]
   const rightSeat = seats[(myIdx + 3) % 4]
 
   const playerBySeat = (seat: Seat): Player | undefined =>
     gameState.players.find((p) => p.seat === seat)
 
-  const leftPlayer = playerBySeat(leftSeat)
-  const topPlayer = playerBySeat(topSeat)
+  const leftPlayer  = playerBySeat(leftSeat)
+  const topPlayer   = playerBySeat(topSeat)
   const rightPlayer = playerBySeat(rightSeat)
 
-  // Win overlay — reveal all hands
+  // ── Win screen ──────────────────────────────────────────────────────────────
   if (gameState.phase === 'finished') {
     const winnerPlayer = gameState.winner ? playerBySeat(gameState.winner) : null
     const isMe = gameState.winner === myPlayer.seat
@@ -76,7 +83,6 @@ export default function GameBoard() {
     return (
       <div className="fixed inset-0 bg-[#111] overflow-y-auto z-50">
         <div className="min-h-full flex flex-col items-center justify-start py-8 px-4 gap-6">
-          {/* Header */}
           <div className="text-center">
             <div className="text-white/30 text-xs uppercase tracking-widest mb-1">
               {gameState.winner ? (isMe ? 'You win!' : `${winnerPlayer?.name ?? 'Someone'} wins`) : 'Draw'}
@@ -85,13 +91,10 @@ export default function GameBoard() {
               {gameState.winner ? (isMe ? '🀄' : SEAT_WIND[gameState.winner]) : '—'}
             </div>
             {winningHandName && (
-              <div className="text-white/70 text-base font-medium tracking-wide">
-                {winningHandName}
-              </div>
+              <div className="text-white/70 text-base font-medium tracking-wide">{winningHandName}</div>
             )}
           </div>
 
-          {/* All player hands */}
           <div className="w-full max-w-lg flex flex-col gap-4">
             {orderedSeats.map((seat) => {
               const p = playerBySeat(seat)
@@ -109,13 +112,12 @@ export default function GameBoard() {
                   </div>
                   <div className="flex flex-wrap gap-[2px]">
                     {sortTiles(showHand).map((tile) => (
-                      <MahjongTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.5} />
+                      <SmallTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.5} />
                     ))}
                     {p.melds.map((meld, i) => (
-                      <div key={`meld-${i}`} className="flex gap-[2px] ml-2 border-l border-white/10 pl-2">
+                      <div key={`meld-${i}`} className="flex gap-[1px] ml-2 border-l border-white/10 pl-2">
                         {meld.tiles.map((tile, j) => (
-                          <MahjongTile key={j} suit={tile.suit} value={tile.value}
-                            faceDown={meld.type === 'concealed-kong' && (j === 0 || j === 3)} scale={0.5} />
+                          <SmallTile key={j} suit={tile.suit} value={tile.value} scale={0.5} />
                         ))}
                       </div>
                     ))}
@@ -124,7 +126,7 @@ export default function GameBoard() {
                     <div className="flex flex-wrap gap-[2px] mt-2 pt-2 border-t border-white/5">
                       <span className="text-white/20 text-[9px] uppercase tracking-widest self-center mr-1">Flowers</span>
                       {p.flowerTiles.map((tile) => (
-                        <MahjongTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.45} />
+                        <SmallTile key={tile.id} suit={tile.suit} value={tile.value} scale={0.4} />
                       ))}
                     </div>
                   )}
@@ -137,14 +139,13 @@ export default function GameBoard() {
     )
   }
 
-  const bottomHandHeight = Math.round(90) + 28
-  const boardBottom = bottomHandHeight
+  const handStripH = 90 + 28   // ~118px
 
-  // Active-player directional glow
+  // Active-player glow
   const activeDir =
-    gameState.currentTurn === topSeat ? 'top' :
-    gameState.currentTurn === leftSeat ? 'left' :
-    gameState.currentTurn === rightSeat ? 'right' :
+    gameState.currentTurn === topSeat    ? 'top'    :
+    gameState.currentTurn === leftSeat   ? 'left'   :
+    gameState.currentTurn === rightSeat  ? 'right'  :
     gameState.currentTurn === myPlayer.seat ? 'bottom' : null
 
   const glowGradient: Record<string, string> = {
@@ -154,77 +155,80 @@ export default function GameBoard() {
     bottom: 'radial-gradient(ellipse 70% 30% at 50% 100%, rgba(255,255,255,0.10) 0%, transparent 100%)',
   }
 
+  // My extras strip (melds + flowers) height above hand
+  const myMeldH   = myPlayer.melds.length > 0 ? Math.round(90 * 0.48) + 4 : 0
+  const myFlowerH = myPlayer.flowerTiles.length > 0 && myPlayer.melds.length === 0 ? Math.round(90 * 0.38) + 4 : 0
+  const myExtrasH = myMeldH || myFlowerH
+
+  // How wide the side panels are (approx) — determines center area padding
+  const SIDE_PANEL_W = 36   // OpponentHand rotation container width (ROW_H=28) + margin
+
   return (
     <div
       className="fixed inset-0 bg-[#111] overflow-hidden"
-      style={{ paddingBottom: boardBottom }}
+      style={{ paddingBottom: handStripH }}
     >
-      {/* ── Active player glow ────────────────────────────── */}
+      {/* Active player glow */}
       {activeDir && (
-        <div
-          className="turn-glow absolute inset-0 z-0"
+        <div className="turn-glow absolute inset-0 z-0 pointer-events-none"
           style={{ background: glowGradient[activeDir] }}
         />
       )}
 
-      {/* ── Top opponent ─────────────────────────────────── */}
-      <div className="absolute top-0 left-0 right-0 flex flex-col items-center pt-3 pb-1">
+      {/* ── Top opponent ────────────────────────────────────── */}
+      <div className="absolute top-0 left-0 right-0 flex flex-col items-center pt-2 z-10">
         {topPlayer && (
-          <>
-            <OpponentHand
-              name={topPlayer.name}
-              tileCount={topPlayer.tileCount}
-              isActive={gameState.currentTurn === topSeat}
-              position="top"
-            />
-            {topPlayer.melds.length > 0 && <MeldGroup melds={topPlayer.melds} scale={0.45} />}
-            {topPlayer.flowerTiles.length > 0 && (
-              <div className="flex gap-[2px] mt-1">
-                {topPlayer.flowerTiles.map((t) => (
-                  <MahjongTile key={t.id} suit={t.suit} value={t.value} scale={0.35} />
-                ))}
-              </div>
-            )}
-          </>
+          <OpponentHand
+            name={topPlayer.name}
+            tileCount={topPlayer.tileCount}
+            melds={topPlayer.melds}
+            flowerTiles={topPlayer.flowerTiles}
+            isActive={gameState.currentTurn === topSeat}
+            position="top"
+          />
         )}
       </div>
 
-      {/* ── Left opponent ─────────────────────────────────── */}
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col items-center pl-2">
+      {/* ── Left opponent ───────────────────────────────────── */}
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10">
         {leftPlayer && (
           <OpponentHand
             name={leftPlayer.name}
             tileCount={leftPlayer.tileCount}
+            melds={leftPlayer.melds}
+            flowerTiles={leftPlayer.flowerTiles}
             isActive={gameState.currentTurn === leftSeat}
             position="left"
           />
         )}
       </div>
 
-      {/* ── Right opponent ────────────────────────────────── */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col items-center pr-2">
+      {/* ── Right opponent ──────────────────────────────────── */}
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 z-10">
         {rightPlayer && (
           <OpponentHand
             name={rightPlayer.name}
             tileCount={rightPlayer.tileCount}
+            melds={rightPlayer.melds}
+            flowerTiles={rightPlayer.flowerTiles}
             isActive={gameState.currentTurn === rightSeat}
             position="right"
           />
         )}
       </div>
 
-      {/* ── Center: discard pile + draw pile ─────────────── */}
-      <div className="absolute inset-0 flex items-center justify-center" style={{ paddingTop: 140, paddingBottom: 20, paddingLeft: 130, paddingRight: 130 }}>
-        <div className="flex flex-col items-center gap-4 w-full h-full">
-          {/* Discard pile */}
+      {/* ── Center: discard pile + draw pile ─────────────────── */}
+      <div
+        className="absolute inset-0 flex items-center justify-center"
+        style={{ paddingTop: 100, paddingBottom: 10, paddingLeft: SIDE_PANEL_W, paddingRight: SIDE_PANEL_W }}
+      >
+        <div className="flex flex-col items-center gap-3 w-full h-full">
           <div className="flex-1 w-full overflow-hidden">
             <DiscardPile
               tiles={gameState.discardPile}
               lastDiscardId={gameState.lastDiscard?.id}
             />
           </div>
-
-          {/* Draw pile */}
           <DrawPile
             wallCount={gameState.wallCount}
             isMyTurn={isMyTurn && !hasDrawnThisTurn}
@@ -233,30 +237,29 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* ── My melds (above hand) ─────────────────────────── */}
-      {myPlayer.melds.length > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-1"
-          style={{ bottom: bottomHandHeight }}
+      {/* ── My extras: melds + flowers above hand ──────────── */}
+      {myExtrasH > 0 && (
+        <div
+          className="absolute left-0 right-0 flex items-center justify-center gap-3 px-3"
+          style={{ bottom: handStripH + 2 }}
         >
-          <MeldGroup melds={myPlayer.melds} scale={0.55} />
-        </div>
-      )}
-
-      {/* ── My flower tiles ───────────────────────────────── */}
-      {myPlayer.flowerTiles.length > 0 && (
-        <div className="absolute right-4 flex gap-[2px]"
-          style={{ bottom: bottomHandHeight + (myPlayer.melds.length > 0 ? 60 : 4) }}
-        >
-          {myPlayer.flowerTiles.map((t) => (
-            <MahjongTile key={t.id} suit={t.suit} value={t.value} scale={0.4} />
-          ))}
+          {myPlayer.melds.length > 0 && (
+            <MeldGroup melds={myPlayer.melds} scale={0.48} />
+          )}
+          {myPlayer.flowerTiles.length > 0 && (
+            <div className="flex gap-[2px]" style={{ borderLeft: myPlayer.melds.length > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none', paddingLeft: myPlayer.melds.length > 0 ? 8 : 0 }}>
+              {myPlayer.flowerTiles.map((t) => (
+                <SmallTile key={t.id} suit={t.suit} value={t.value} scale={0.38} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* ── My label ─────────────────────────────────────── */}
       <div
         className="absolute left-0 right-0 flex justify-center"
-        style={{ bottom: bottomHandHeight + 4 + (myPlayer.melds.length > 0 ? 56 : 0) }}
+        style={{ bottom: handStripH + myExtrasH + 6 }}
       >
         <PlayerLabel player={myPlayer} isActive={isMyTurn} />
       </div>
@@ -264,7 +267,7 @@ export default function GameBoard() {
       {/* ── Action buttons ───────────────────────────────── */}
       <ActionButtons />
 
-      {/* ── Bottom player hand ───────────────────────────── */}
+      {/* ── My hand ──────────────────────────────────────── */}
       <PlayerHand
         hand={hasDrawnThisTurn ? myHand.slice(0, -1) : myHand}
         drawnTile={hasDrawnThisTurn ? myHand[myHand.length - 1] : null}
@@ -272,19 +275,15 @@ export default function GameBoard() {
 
       {/* ── Claim fly animation ──────────────────────────── */}
       {claimAnimation && (() => {
-        const seats: Seat[] = ['east', 'south', 'west', 'north']
-        const myIdx = seats.indexOf(myPlayer.seat)
+        const myIdx2 = seats.indexOf(myPlayer.seat)
         const claimIdx = seats.indexOf(claimAnimation.bySeat)
-        const rel = (claimIdx - myIdx + 4) % 4
+        const rel = (claimIdx - myIdx2 + 4) % 4
         const dirClass = rel === 0 ? 'claim-fly-bottom'
           : rel === 1 ? 'claim-fly-left'
           : rel === 2 ? 'claim-fly-top'
           : 'claim-fly-right'
         return (
-          <div
-            className={`${dirClass} fixed z-50 pointer-events-none`}
-            style={{ top: '50%', left: '50%' }}
-          >
+          <div className={`${dirClass} fixed z-50 pointer-events-none`} style={{ top: '50%', left: '50%' }}>
             <MahjongTile suit={claimAnimation.tile.suit} value={claimAnimation.tile.value} />
           </div>
         )
@@ -293,25 +292,11 @@ export default function GameBoard() {
   )
 }
 
-function PlayerLabel({
-  player,
-  isActive,
-  vertical,
-}: {
-  player: Player
-  isActive: boolean
-  vertical?: boolean
-}) {
+function PlayerLabel({ player, isActive }: { player: Player; isActive: boolean }) {
   return (
-    <div className={`flex items-center gap-1.5 ${vertical ? 'flex-col' : ''}`}>
-      <div
-        className={`w-1.5 h-1.5 rounded-full transition-colors ${
-          isActive ? 'bg-white' : 'bg-white/20'
-        }`}
-      />
-      <span className={`text-xs font-medium ${isActive ? 'text-white' : 'text-white/40'}`}>
-        {player.name}
-      </span>
+    <div className="flex items-center gap-1.5">
+      <div className={`w-1.5 h-1.5 rounded-full transition-colors ${isActive ? 'bg-white' : 'bg-white/20'}`} />
+      <span className={`text-xs font-medium ${isActive ? 'text-white' : 'text-white/40'}`}>{player.name}</span>
       <span className="text-white/20 text-[10px]">{player.score}</span>
     </div>
   )

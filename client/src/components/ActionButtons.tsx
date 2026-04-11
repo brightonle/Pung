@@ -88,7 +88,8 @@ export default function ActionButtons() {
 
   const chiTileIds = showClaim ? getChiTileIds() : null
   const meldCount = myPlayer.melds.length
-  const bottomPx = 118 + (meldCount > 0 ? 100 : 0) + 20
+  // hand strip (~118) + meld/flower row when present (~52) + gap
+  const bottomPx = 118 + (meldCount > 0 ? 52 : 0) + 24
 
   return (
     <div className="fixed left-0 right-0 flex flex-col items-center gap-2 z-20"
